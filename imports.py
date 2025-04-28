@@ -19,6 +19,10 @@ import torch.nn as nn
 import time
 import torch.optim.lr_scheduler as lr_scheduler
 # import moviepy.editor as mpy
+from moviepy.video.VideoClip import ImageClip
+from moviepy.video.io.VideoFileClip import VideoFileClip
+from moviepy.video.compositing.CompositeVideoClip import concatenate_videoclips
+from moviepy.audio.io.AudioFileClip import AudioFileClip
 from PIL import Image
 import tempfile
 from scipy.io import wavfile

@@ -192,7 +192,7 @@ class AudioVisualDataset(Dataset):
             path_parts = self.audios[index].strip().split('/')
             video_num = path_parts[-1][:-4]
             
-            frames_dir = os.path.join(self.frame_dir, video_num)
+            frames_dir = os.path.join(self.frame_dir, video_num[-6:])
             frame_files = sorted(os.listdir(frames_dir))
             
 

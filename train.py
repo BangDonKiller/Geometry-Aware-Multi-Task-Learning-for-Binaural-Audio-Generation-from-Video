@@ -11,16 +11,27 @@ from params import *
 
 
 def lr_decrease(optimizer, decay_param=0.9):
-    for param_group in optimizer.param_groups:
-        param_group['lr'] *= decay_factor
-    
-
-def debug_dataset(dataset, epoch, idx=15,flag='input'):
-    """ debug function to whatch a specific index in the dataset.
-        saves the output to the dubug folder. 
+    """
+    將優化器 (optimizer) 中的學習率 (learning rate) 按照 decay_param 進行衰減。
 
     Args:
-        idx (int, optional): index for a place in the dataset. Defaults to 15.
+        optimizer (torch.optim.Optimizer): 優化器物件，例如 Adam、SGD 等。
+        decay_param (float, optional): 學習率衰減係數，預設為 0.9，代表每次調整後學習率變為原本的 90%。
+    """
+    for param_group in optimizer.param_groups:
+        param_group['lr'] *= decay_param
+
+    
+
+def debug_dataset(dataset, epoch, idx=15, flag='input'):
+    """
+    針對資料集 (dataset) 中指定索引 (idx) 的資料進行除錯，將頻譜圖與影像存到本地資料夾。
+
+    Args:
+        dataset (dict): 包含聲音頻譜與影像資料的字典。
+        epoch (int): 當前訓練的 epoch 數，用來標記存檔名稱。
+        idx (int, optional): 欲查看的資料索引，預設為 15。
+        flag (str, optional): 指定是 input (輸入資料) 還是 output (模型輸出結果)，預設為 'input'。
     """
     if flag == 'input':
         frame = dataset['frame']
@@ -50,16 +61,28 @@ def debug_dataset(dataset, epoch, idx=15,flag='input'):
         plt.savefig('pic_for_debug/audio_spec_output_' + str(epoch) + '.jpg', format='jpg')
 
 
+
     
 def display_val(model, loss_criterion, writer, index, dataset_val):
+    """
+    在驗證資料集 (validation dataset) 上評估模型表現，計算平均損失 (loss)，並將結果寫入 TensorBoard。
+
+    Args:
+        model (torch.nn.Module): 要驗證的模型。
+        loss_criterion (torch.nn.Module): 損失函數，例如 MSELoss。
+        writer (SummaryWriter): TensorBoardX 的寫入器，用來記錄 loss。
+        index (int): 當前的迭代次數 (通常是 epoch 數或 step 數)。
+        dataset_val (DataLoader): 驗證資料集的 DataLoader。
+    
+    Returns:
+        avg_loss (float): 本次驗證的平均損失值。
+    """
     losses = []
     with torch.no_grad():
         for i, val_data in enumerate(tqdm.tqdm(dataset_val, desc="Validation", leave=False)):
             output = model(val_data, mode='val')
             channel1_spec = val_data['channel1_spec'].to(device)
             channel2_spec = val_data['channel2_spec'].to(device)
-            # channel1_loss = loss_criterion(2*output['left_spectrogram']-output['binaural_spectrogram'], output['audio_gt'].detach())
-            # channel2_loss = loss_criterion(output['binaural_spectrogram']-2*output['right_spectrogram'], output['audio_gt'].detach())
             
             channel1_loss = loss_criterion(output['left_spectrogram'], val_data["channel1_spec"][:,:,:-1,:].to(device))
             channel2_loss = loss_criterion(output['right_spectrogram'], val_data["channel2_spec"][:,:,:-1,:].to(device))
@@ -67,32 +90,35 @@ def display_val(model, loss_criterion, writer, index, dataset_val):
             loss = loss_criterion(output['binaural_spectrogram'], Variable(output['audio_gt'])) + fus_loss
 
             losses.append(loss.item()) 
-    avg_loss = sum(losses)/len(losses)
+    avg_loss = sum(losses) / len(losses)
     writer.add_scalar('data/val_loss', avg_loss, index)
     print('val loss: %.3f' % avg_loss)
     return avg_loss
 
 
+
 def clear_folder(folder_path):
-    # Check if the folder exists
+    """
+    清除指定資料夾 (folder_path) 中的所有檔案與子資料夾。
+
+    Args:
+        folder_path (str): 要清除的資料夾路徑。
+    """
     if not os.path.exists(folder_path):
         print(f"Folder '{folder_path}' does not exist.")
         return
 
-    # Iterate over the files and subdirectories in the folder
     for filename in os.listdir(folder_path):
         file_path = os.path.join(folder_path, filename)
 
-        # Check if it's a file or subdirectory
         if os.path.isfile(file_path):
-            # If it's a file, remove it
             os.remove(file_path)
             print(f"Removed file: {file_path}")
         elif os.path.isdir(file_path):
-            # If it's a subdirectory, recursively clear its contents and then remove it
             clear_folder(file_path)
             os.rmdir(file_path)
             print(f"Removed directory: {file_path}")
+
     
 
 if __name__ == '__main__':

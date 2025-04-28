@@ -10,12 +10,18 @@ from params import *
 
 
 def show_spec(spec_left_true,spec_right_true, spec_left_pred,spec_right_pred, idx):
-    spec_left_pred = torch.clone(spec_left_pred).to('cpu').detach()
-    spec_right_pred = torch.clone(spec_right_pred).to('cpu').detach()
-    spec_left_true = torch.sqrt(spec_left_true[0,:,:]**2 + spec_left_true[1,:,:]**2) 
-    spec_right_true = torch.sqrt(spec_right_true[0,:,:]**2 + spec_right_true[1,:,:]**2) 
-    spec_left_pred = torch.sqrt(spec_left_pred[0,:,:]**2 + spec_left_pred[1,:,:]**2) 
-    spec_right_pred = torch.sqrt(spec_right_pred[0,:,:]**2 + spec_right_pred[1,:,:]**2) 
+    # 預測的頻譜（左、右），從GPU移到CPU、分離計算圖，並轉為 NumPy array
+    spec_left_pred = torch.clone(spec_left_pred).to('cpu').detach().numpy()
+    spec_right_pred = torch.clone(spec_right_pred).to('cpu').detach().numpy()
+
+    # 真實的頻譜（左、右），直接處理模長（假設仍是Tensor時）
+    spec_left_true = torch.sqrt(spec_left_true[0, :, :]**2 + spec_left_true[1, :, :]**2).cpu().detach().numpy()
+    spec_right_true = torch.sqrt(spec_right_true[0, :, :]**2 + spec_right_true[1, :, :]**2).cpu().detach().numpy()
+
+    # 預測的頻譜（左、右）處理模長
+    spec_left_pred = np.sqrt(spec_left_pred[0, :, :]**2 + spec_left_pred[1, :, :]**2)
+    spec_right_pred = np.sqrt(spec_right_pred[0, :, :]**2 + spec_right_pred[1, :, :]**2)
+
     
     
     plt.figure(figsize=(15, 10))
@@ -66,33 +72,38 @@ def save_audio(audio_data, path):
         audio =  np.hstack((audio_channel_left.reshape(-1, 1), audio_channel_right.reshape(-1, 1)))
         wavfile.write(path,audio_sampling_rate, audio)
 
-    
+
 def video_from_frames(frames, path):
-    frame_duration = 1 / 30
-    desired_duration = 10
-    
-    # Calculate the number of frames needed to achieve the desired duration
+    # TODO: FIX moivepy bug
+    frame_duration = 1 / 30  # 每個畫面的持續時間
+    desired_duration = 10  # 目標視頻持續時間
+
+    # 計算達成目標持續時間所需的影格數量
     num_frames = int(desired_duration / frame_duration)
 
-    # Load the frames and create a list of video clips
+    # 轉置 frames 並將它們轉換為 NumPy 陣列
     transposed_frames = [np.transpose(frame[0, :, :, :], (1, 2, 0)) for frame in frames]
-    frame_clips = [mpy.ImageClip(frame_file, duration=frame_duration) for frame_file in transposed_frames[:num_frames]]
 
-    # Concatenate the video clips to create the final video
-    video_clip = mpy.concatenate_videoclips(frame_clips, method="compose")
+    # 創建影像剪輯列表，這裡需要將 Tensor 轉換為 NumPy 陣列
+    frame_clips = [
+        ImageClip(frame.to('cpu').numpy(), duration=frame_duration) 
+        for frame in transposed_frames[:num_frames]
+    ]
 
-    # Set the duration of the video
+    # 合併視頻剪輯為最終的視頻
+    video_clip = concatenate_videoclips(frame_clips, method="compose")
+
+    # 計算視頻的總時長
     video_duration = len(frame_clips) * frame_duration
     video_clip = video_clip.set_duration(video_duration)
 
-    # Set the frame rate of the video
+    # 設置視頻的幀率（fps）
     frame_rate = 30
     video_clip = video_clip.set_fps(frame_rate)
 
-    # Write the final video to the output file
+    # 輸出視頻文件到指定路徑
     video_clip.write_videofile(path, codec='libx264')
 
-    
     
 def video_from_files(idx, paths):
     
@@ -105,10 +116,10 @@ def video_from_files(idx, paths):
     combine_audio_path = paths["combine_audio"]
 
     # loading video gfg
-    video_clip = mpy.VideoFileClip(paths["frames_video"]) 
+    video_clip = VideoFileClip(paths["frames_video"]) 
     
     # create stereo audio
-    audio_clip = mpy.AudioFileClip(combine_audio_path)
+    audio_clip = AudioFileClip(combine_audio_path)
 
     video_clip = video_clip.set_audio(audio_clip)
     

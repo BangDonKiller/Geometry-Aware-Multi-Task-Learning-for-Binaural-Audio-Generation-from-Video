@@ -36,8 +36,8 @@ weight_decay = 0.0005 # use for regolization
 train_epochs = 10
 loss_choose = "diff"  # channel or diff
 if loss_choose == "diff":
-    checkpoints_dir = "/home/dsi/bermanl1/CODE/checkpoints/"
-    video_path = "/home/dsi/bermanl1/Geometry-Aware-Multi-Task-Learning-for-Binaural-Audio-Generation-from-Video/output_videos"
+    checkpoints_dir = "checkpoints"
+    video_path = "output_videos"
     test_spec_path = 'pic_for_test_debug'
 elif loss_choose =="channel":
     checkpoints_dir = "/home/dsi/bermanl1/CODE/checkpoints2/"
