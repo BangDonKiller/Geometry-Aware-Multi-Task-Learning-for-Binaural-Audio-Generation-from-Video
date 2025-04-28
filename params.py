@@ -1,7 +1,7 @@
 import os
 import torch
 
-gpu_ids = [4]
+gpu_ids = [0]
 gpu_available = True
 devices = []
 
@@ -18,12 +18,13 @@ if gpu_available and torch.cuda.is_available():
 else:
     device = torch.device('cpu')
     
-frames_dir = "/dsi/gannot-lab2/datasets2/FAIR-Play/frames_30fps/"
-audios_dir = "/dsi/gannot-lab2/datasets2/FAIR-Play/binaural_audios/"
-debug_dir = "/home/dsi/bermanl1/Geometry-Aware-Multi-Task-Learning-for-Binaural-Audio-Generation-from-Video/pic_for_debug"
-batch_size = 64
+frames_dir = "D:/Dataset/FAIR-Play/frames"
+audios_dir = "D:/Dataset/FAIR-Play/binaural_audios"
+debug_dir = "pic_for_debug"
+checkpoints_dir2 = "checkpoints"
+batch_size = 32
 batch_size_test = 1
-epochs = 1000
+epochs = 10
 
 
 lr = 1e-4
@@ -32,7 +33,7 @@ lr_decrese_fq = 10
 
 beta1 = 0.9
 weight_decay = 0.0005 # use for regolization
-train_epochs = 1000
+train_epochs = 10
 loss_choose = "diff"  # channel or diff
 if loss_choose == "diff":
     checkpoints_dir = "/home/dsi/bermanl1/CODE/checkpoints/"
@@ -46,10 +47,10 @@ elif loss_choose =="channel":
 decay_factor = 0.94
 alpha = 0
 
-display_freq = 50     #display_freq batches the training progress 
+display_freq = 50     # display_freq batches the training progress 
 save_epoch_freq = 50
-save_latest_freq = 5000
-validation_freq = 100
+save_latest_freq = 10
+validation_freq = 10
 test_overlap = 0.5
 
 # weights of loss
@@ -58,7 +59,7 @@ lambda_s = 1
 lambda_g = 0.01
 lambda_p = 1
 lambda_f = 1
-lambda_binarual =1
+lambda_binarual = 1
 
 audio_length = 0.63
 audio_sampling_rate = 16000

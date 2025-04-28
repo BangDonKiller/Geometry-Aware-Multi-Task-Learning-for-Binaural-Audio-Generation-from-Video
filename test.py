@@ -248,7 +248,7 @@ def handle_output(data, outputs, idx, num_loops):
 
 
 def build_test_model():
-    resnet18 = models.resnet18(pretrained=True)
+    resnet18 = models.resnet18(weights=ResNet18_Weights.DEFAULT)
     visual_net = VisualNet(resnet18).to(device)
     audio_net = AudioNet().to(device)
     fusion_net = APNet().to(device)

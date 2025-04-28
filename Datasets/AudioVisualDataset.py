@@ -47,7 +47,7 @@ class AudioVisualDataset(Dataset):
         self.audio_length = audio_length           # the audio for each length is 0.63 sec
         self.audio_sampling_rate = audio_sampling_rate    # sampling rate for each audio
         self.enable_data_augmentation = True
-        self.nThreads = 16
+        self.nThreads = 0
         self.audios = []
         self.device = device
         self.mode = mode
@@ -101,7 +101,7 @@ class AudioVisualDataset(Dataset):
             # get the closest frame to the audio segment
             frame_index = int(
                 round(((audio_start_time + audio_end_time) / 2.0 + 0.05) * 10))  # 10 frames extracted per second
-            frame = process_image(Image.open(os.path.join(self.frame_dir, video_num, str(frame_index).zfill(3) + '.jpg')).convert('RGB'),
+            frame = process_image(Image.open(os.path.join(self.frame_dir, video_num[-6:], str(frame_index) + '.jpg')).convert('RGB'),
                                 self.enable_data_augmentation)
             frame = self.vision_transform(frame)
 
@@ -110,7 +110,7 @@ class AudioVisualDataset(Dataset):
             second_frame_index = int(np.round(frame_index + 10*delta)) 
             if second_frame_index <= 0:
                 second_frame_index = int(np.round(frame_index + 10*abs(delta)))
-            second_frame = process_image(Image.open(os.path.join(self.frame_dir, video_num, str(second_frame_index).zfill(3) + '.jpg')).convert('RGB'),
+            second_frame = process_image(Image.open(os.path.join(self.frame_dir, video_num[-6:], str(frame_index) + '.jpg')).convert('RGB'),
                                 self.enable_data_augmentation)
             second_frame = self.vision_transform(second_frame)
             
@@ -150,7 +150,7 @@ class AudioVisualDataset(Dataset):
             # get the closest frame to the audio segment
             frame_index = int(
                 round(((audio_start_time + audio_end_time) / 2.0 + 0.05) * 10))  # 10 frames extracted per second
-            frame = process_image(Image.open(os.path.join(self.frame_dir, video_num, str(frame_index).zfill(3) + '.jpg')).convert('RGB'),
+            frame = process_image(Image.open(os.path.join(self.frame_dir, video_num[-6:], str(frame_index) + '.jpg')).convert('RGB'),
                                 self.enable_data_augmentation)
             frame = self.vision_transform(frame)
 
@@ -159,7 +159,7 @@ class AudioVisualDataset(Dataset):
             second_frame_index = int(np.round(frame_index + 10*delta)) 
             if second_frame_index <= 0:
                 second_frame_index = int(np.round(frame_index + 10*abs(delta)))
-            second_frame = process_image(Image.open(os.path.join(self.frame_dir, video_num, str(second_frame_index).zfill(3) + '.jpg')).convert('RGB'),
+            second_frame = process_image(Image.open(os.path.join(self.frame_dir, video_num[-6:], str(frame_index) + '.jpg')).convert('RGB'),
                                 self.enable_data_augmentation)
             second_frame = self.vision_transform(second_frame)
             

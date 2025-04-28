@@ -54,7 +54,7 @@ def debug_dataset(dataset, epoch, idx=15,flag='input'):
 def display_val(model, loss_criterion, writer, index, dataset_val):
     losses = []
     with torch.no_grad():
-        for i, val_data in enumerate(dataset_val):
+        for i, val_data in enumerate(tqdm.tqdm(dataset_val, desc="Validation", leave=False)):
             output = model(val_data, mode='val')
             channel1_spec = val_data['channel1_spec'].to(device)
             channel2_spec = val_data['channel2_spec'].to(device)
@@ -134,10 +134,10 @@ if __name__ == '__main__':
 
     ## build nets
     # resnet18 main net in our code
-    resnet18 = models.resnet18(pretrained=True)
+    resnet18 = models.resnet18(weights=ResNet18_Weights.DEFAULT)
     visual_net = VisualNet(resnet18)
 
-    # spatial coherence net
+    # spatial coherence net 音訊翻轉模型
     spatial_net = AudioNet(input_nc=4)
     spatial_net.apply(weights_init)
 
@@ -192,7 +192,9 @@ if __name__ == '__main__':
     for epoch in range(epochs):
         if gpu_available:
             torch.cuda.synchronize(device=device)
-        for i, data in enumerate(data_loader):
+        pbar = tqdm.tqdm(data_loader, desc=f"Epoch {epoch+1}/{epochs} (Training)", leave=False)
+        for i, data in enumerate(pbar):
+
 
             total_steps += batch_size
 
@@ -200,7 +202,7 @@ if __name__ == '__main__':
             # zero grad
             optimizer.zero_grad()
 
-            output = model(data,mode='train')
+            output = model(data, mode='train')
             
 
             ## compute loss for each model
@@ -210,27 +212,39 @@ if __name__ == '__main__':
             difference_loss = loss_criterion(output['binaural_spectrogram'], output['audio_gt'])
             # channel1_loss = loss_criterion(2*output['left_spectrogram']-output['binaural_spectrogram'], output['audio_gt'].detach())
             # channel2_loss = loss_criterion(output['binaural_spectrogram']-2*output['right_spectrogram'], output['audio_gt'].detach())
+            
+            # 左右聲道與原資料的loss
             channel1_loss = loss_criterion(output['left_spectrogram'], data["channel1_spec"][:,:,:-1,:].to(device))
             channel2_loss = loss_criterion(output['right_spectrogram'], data["channel2_spec"][:,:,:-1,:].to(device))
             
+            # 左右聲道loss的平均值
             fusion_loss = (channel1_loss / 2 + channel2_loss / 2)
+            
+            # backbone的loss = 頻譜差異的loss + 左右聲道loss的平均值
             loss_backbone = lambda_binarual * difference_loss + lambda_f * fusion_loss
             
-            # geometric consistency loss
+            # geometric consistency loss 上下一幀的視覺向量特徵差異
             mse_geometry = loss_criterion(output['visual_feature'], output['second_visual_feature']) 
             loss_geometry = torch.maximum(mse_geometry - alpha, torch.tensor(0))
             
-            # spatial coherence loss
+            # spatial coherence loss 音訊翻轉任務的loss
             c = output['cl_pred']
             c_pred = output['label']
             loss_spatial = spatial_loss_criterion(c, c_pred)
             
             # combine loss
+            # 現在沒有RIR loss
             loss = lambda_b * loss_backbone + lambda_g * loss_geometry + lambda_s * loss_spatial
+            
+            # batch_loss = 總損失
             batch_loss.append(loss.item())
+            # batch_loss1 = 頻譜差異的loss
             batch_loss1.append(difference_loss.item())
+            # batch_fusion_loss = 左右聲道loss的平均值
             batch_fusion_loss.append(fusion_loss.item())
+            # batch_spat_const_loss = 音訊翻轉任務的loss
             batch_spat_const_loss.append(loss_spatial.item())
+            # batch_geom_const_loss = 上下一幀的視覺向量特徵差異
             batch_geom_const_loss.append(loss_geometry.item())
             
             # update optimizer
@@ -241,21 +255,24 @@ if __name__ == '__main__':
             
             #optimizer_resnet.step()
             optimizer.step()
+            
+            # update pbar
+            avg_loss = sum(batch_loss) / len(batch_loss)
+            pbar.set_postfix({"avg_loss": f"{avg_loss:.4f}"})
 
 
-
+            # 顯示當前batch的Loss並且寫入tensorboard
             if(i % display_freq == 0):
                 if spec_debug:
                     debug_dataset(data, epoch)
                     debug_dataset(output, epoch, flag='output')
-                
-                print('Display training progress at (epoch %d, total_steps %d)' % (epoch, total_steps))
+                # print('Display training progress at (epoch %d, total_steps %d)' % (epoch, total_steps))
                 avg_loss = sum(batch_loss) / len(batch_loss)
                 avg_loss1 = sum(batch_loss1) / len(batch_loss1)
                 avg_fusion_loss = sum(batch_fusion_loss) / len(batch_fusion_loss)
                 avg_spat_const_loss = sum(batch_spat_const_loss) / len(batch_spat_const_loss)
                 avg_geom_const_loss = sum(batch_geom_const_loss) / len(batch_geom_const_loss)
-                print('Average loss: %.3f' % (avg_loss))
+                # print('Average loss: %.3f' % (avg_loss))
                 batch_loss, batch_loss1, batch_fusion_loss, batch_rir_loss, batch_spat_const_loss, batch_geom_const_loss = [], [], [], [], [], []
                 writer.add_scalar('data/loss', avg_loss, total_steps)
                 writer.add_scalar('data/loss1', avg_loss1, total_steps)
@@ -263,32 +280,32 @@ if __name__ == '__main__':
                 writer.add_scalar('data/spat_const_loss', avg_spat_const_loss, total_steps)
                 writer.add_scalar('data/geom_const_loss', avg_geom_const_loss, total_steps)
                     
+        # 存取模型權重至checkpoints資料夾
+        if(epoch % save_latest_freq == 0):
+            print('saving the latest model (epoch %d, total_steps %d)' % (epoch, total_steps))
+            torch.save(visual_net.state_dict(), os.path.join('.', checkpoints_dir2, 'visual_latest.pth'))
+            torch.save(audio_net.state_dict(), os.path.join('.', checkpoints_dir2, 'audio_latest.pth'))
+            torch.save(fusion_net.state_dict(), os.path.join('.', checkpoints_dir2, 'fusion_latest.pth'))
+            torch.save(spatial_net.state_dict(), os.path.join('.', checkpoints_dir2, 'classifier_latest.pth'))
+            torch.save(generator.state_dict(), os.path.join('.', checkpoints_dir2, 'generator_latest.pth'))
 
-            if(i % save_latest_freq == 0):
-                    print('saving the latest model (epoch %d, total_steps %d)' % (epoch, total_steps))
-                    torch.save(visual_net.state_dict(), os.path.join('.', checkpoints_dir2, 'visual_latest.pth'))
-                    torch.save(audio_net.state_dict(), os.path.join('.', checkpoints_dir2, 'audio_latest.pth'))
-                    torch.save(fusion_net.state_dict(), os.path.join('.', checkpoints_dir2, 'fusion_latest.pth'))
-                    torch.save(spatial_net.state_dict(), os.path.join('.', checkpoints_dir2, 'classifier_latest.pth'))
-                    torch.save(generator.state_dict(), os.path.join('.', checkpoints_dir2, 'generator_latest.pth'))
-
-            if(i % validation_freq == 0):
-                    model.eval()
-                    dataset.mode = 'val'
-                    print('Display validation results at (epoch %d, total_steps %d)' % (epoch, total_steps))
-                    val_err = display_val(model, loss_criterion, writer, total_steps, data_loader_val)
-                    print('end of display \n')
-                    model.train()
-                    dataset.mode = 'train'
-                    #save the model that achieves the smallest validation error
-                    if val_err < best_err:
-                        best_err = val_err
-                        print('saving the best model (epoch %d, total_steps %d) with validation error %.3f\n' % (epoch, total_steps, val_err))
-                        torch.save(visual_net.state_dict(), os.path.join('.', checkpoints_dir2, 'visual_best.pth'))
-                        torch.save(audio_net.state_dict(), os.path.join('.', checkpoints_dir2, 'audio_best.pth'))
-                        torch.save(fusion_net.state_dict(), os.path.join('.', checkpoints_dir2, 'fusion_best.pth'))
-                        torch.save(spatial_net.state_dict(), os.path.join('.', checkpoints_dir2, 'classifier_best.pth'))
-                        torch.save(generator.state_dict(), os.path.join('.', checkpoints_dir2, 'generator_best.pth'))
+        if(epoch % validation_freq == 0):
+            model.eval()
+            dataset.mode = 'val'
+            print('Display validation results at (epoch %d, total_steps %d)' % (epoch, total_steps))
+            val_err = display_val(model, loss_criterion, writer, total_steps, data_loader_val)
+            print('end of display \n')
+            model.train()
+            dataset.mode = 'train'
+            #save the model that achieves the smallest validation error
+            if val_err < best_err:
+                best_err = val_err
+                print('saving the best model (epoch %d, total_steps %d) with validation error %.3f\n' % (epoch, total_steps, val_err))
+                torch.save(visual_net.state_dict(), os.path.join('.', checkpoints_dir2, 'visual_best.pth'))
+                torch.save(audio_net.state_dict(), os.path.join('.', checkpoints_dir2, 'audio_best.pth'))
+                torch.save(fusion_net.state_dict(), os.path.join('.', checkpoints_dir2, 'fusion_best.pth'))
+                torch.save(spatial_net.state_dict(), os.path.join('.', checkpoints_dir2, 'classifier_best.pth'))
+                torch.save(generator.state_dict(), os.path.join('.', checkpoints_dir2, 'generator_best.pth'))
         if (epochs * lr_decrese_fq) > 0 and epochs % lr_decrese_fq:
             lr_decrease(optimizer)
         

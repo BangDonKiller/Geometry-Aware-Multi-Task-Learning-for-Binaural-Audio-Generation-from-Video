@@ -7,6 +7,7 @@ import torchvision.transforms as transforms
 from torchvision.transforms import Compose, Normalize
 import torchvision.datasets as datasets
 import torchvision.models as models
+from torchvision.models import ResNet18_Weights
 import os
 import librosa
 import random
@@ -17,10 +18,11 @@ import matplotlib.pyplot as plt
 import torch.nn as nn
 import time
 import torch.optim.lr_scheduler as lr_scheduler
-import moviepy.editor as mpy
+# import moviepy.editor as mpy
 from PIL import Image
 import tempfile
 from scipy.io import wavfile
 import ffmpeg
 import subprocess
 from pydub import AudioSegment
+import tqdm
