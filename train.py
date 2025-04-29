@@ -134,7 +134,7 @@ if __name__ == '__main__':
                 num_workers=int(dataset.nThreads))
 
 
-        # validation dataset
+    # validation dataset
     dataset.mode = 'val'
     val_dataset = AudioVisualDataset(audios_dir, frames_dir, gpu_available,  'val')
     subset_val_dataset = Subset(val_dataset, val_dataset.val_indices)

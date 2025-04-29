@@ -66,4 +66,4 @@ audio_sampling_rate = 16000
 spec_debug = False
 debug_test_idx = 10
 
-ffmpeg_path='/home/dsi/bermanl1/anaconda3/envs/new4/bin/ffmpeg'
+# ffmpeg_path='/home/dsi/bermanl1/anaconda3/envs/new4/bin/ffmpeg'
