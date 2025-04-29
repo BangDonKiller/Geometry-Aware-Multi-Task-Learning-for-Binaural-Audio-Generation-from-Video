@@ -10,6 +10,15 @@ from imports import *
 from params import *
 
 def generate_spectrogram(audio):
+    """
+    將一維音訊訊號轉換為包含實部與虛部的頻譜圖（兩通道）
+
+    - 參數:
+        - audio (np.ndarray): 單聲道或多聲道的一維音訊訊號
+    
+    - 回傳:
+        - np.ndarray: 形狀為 (2, 頻率bins, 時間frames) 的二通道頻譜圖，第一通道為實部、第二通道為虛部
+    """
     spectro = librosa.core.stft(audio, n_fft=512, hop_length=160, win_length=400, center=True)
     real = np.expand_dims(np.real(spectro), axis=0)
     imag = np.expand_dims(np.imag(spectro), axis=0)
@@ -18,6 +27,16 @@ def generate_spectrogram(audio):
 
 
 def process_image(image, augment):
+    """
+    對輸入圖像進行裁剪與資料增強處理（亮度與色彩調整）
+
+    - 參數:
+        - image (PIL.Image): 輸入圖像
+        - augment (bool): 是否啟用資料增強
+
+    - 回傳:
+        - PIL.Image: 處理後的圖像
+    """
     image = image.resize((480, 240))
     w, h = image.size
     w_offset = w - 448
@@ -34,6 +53,17 @@ def process_image(image, augment):
 
 
 def normalize(samples, desired_rms = 0.1, eps = 1e-4):
+    """
+    將音訊樣本正規化，使其均方根值 (RMS) 接近指定目標
+
+    - 參數:
+        - samples (np.ndarray): 音訊樣本
+        - desired_rms (float): 期望的 RMS 值，預設為 0.1
+        - eps (float): 為避免除以 0，加入的最小常數
+    
+    - 回傳:
+        - np.ndarray: 正規化後的音訊樣本
+    """
     rms = np.maximum(eps, np.sqrt(np.mean(samples ** 2)))
     samples = samples * (desired_rms / rms)
     return samples
@@ -63,7 +93,7 @@ class AudioVisualDataset(Dataset):
         self.vision_transform = transforms.Compose(vision_transform_list)
         self.vision_output_transform = transforms.Compose([transforms.PILToTensor()])
         
-        # split the data to train, val, test
+        # 切分資料集為訓練、驗證和測試集
         total_samples = len([f for f in os.listdir(audio_dir) if os.path.isfile(os.path.join(audio_dir, f))])
         train_ratio = 0.7  # 70% for training
         val_ratio = 0.15  # 15% for validation
@@ -82,39 +112,45 @@ class AudioVisualDataset(Dataset):
 
     def __getitem__(self, index):
         if self.mode =='train':
-            # load audio   
+            # 載入音訊  
             audio, audio_rate = librosa.load(self.audios[index], sr=self.audio_sampling_rate, mono=False)
-            # randomly get a start time for the audio segment from the 10s clip
+            # 在此音樂檔案中(10s)隨機選擇一個開始時間，此片段0.63秒
             audio_start_time = random.uniform(0, 9.9 - self.audio_length)
             audio_end_time = audio_start_time + self.audio_length
             audio_start = int(audio_start_time * self.audio_sampling_rate)
             audio_end = audio_start + int(self.audio_length * self.audio_sampling_rate)
             audio = audio[:, audio_start:audio_end]
+            # 正規化音訊樣本
             audio = normalize(audio)
+            # 區分左右聲道
             audio_channel1 = audio[0, :]
             audio_channel2 = audio[1, :]
 
-            # get the frame dir path based on audio path
+            # 找到音訊片段的對應影像幀檔案路徑
             path_parts = self.audios[index].strip().split('/')
-            video_num = path_parts[-1][:-4]
+            video_num = path_parts[-1][-10:-4]
 
-            # get the closest frame to the audio segment
+            # 獲取與音訊片段最接近的影像幀檔案
             frame_index = int(
                 round(((audio_start_time + audio_end_time) / 2.0 + 0.05) * 10))  # 10 frames extracted per second
-            frame = process_image(Image.open(os.path.join(self.frame_dir, video_num[-6:], str(frame_index) + '.jpg')).convert('RGB'),
+            # 讀取影像幀檔案，並做資料強化
+            frame = process_image(Image.open(os.path.join(self.frame_dir, video_num, str(frame_index) + '.jpg')).convert('RGB'),
                                 self.enable_data_augmentation)
+            # 將影像轉換為張量並進行正規化
             frame = self.vision_transform(frame)
 
-            # get a frame 1 secend befor/after the original frame
+            # 獲取與原始影像幀檔案相差1秒的影像幀檔案，做的資料處理與上面相同
+            # 這裡的 delta 是隨機生成的，範圍在 -1 到 1 之間
             delta = random.uniform(-1, 1)
             second_frame_index = int(np.round(frame_index + 10*delta)) 
             if second_frame_index <= 0:
                 second_frame_index = int(np.round(frame_index + 10*abs(delta)))
-            second_frame = process_image(Image.open(os.path.join(self.frame_dir, video_num[-6:], str(frame_index) + '.jpg')).convert('RGB'),
+            second_frame = process_image(Image.open(os.path.join(self.frame_dir, video_num, str(frame_index) + '.jpg')).convert('RGB'),
                                 self.enable_data_augmentation)
             second_frame = self.vision_transform(second_frame)
             
-            # passing the spectrogram of the difference
+            # 將音訊片段轉換為頻譜圖，並將其轉換為浮點數張量
+            # 這邊的處理是作為Ground Truth的資料
             audio_diff_spec = torch.FloatTensor(generate_spectrogram(audio_channel1 - audio_channel2))
             audio_mix_spec = torch.FloatTensor(generate_spectrogram(audio_channel1 + audio_channel2))
             channel1_spec = torch.FloatTensor(generate_spectrogram(audio_channel1))
@@ -122,6 +158,8 @@ class AudioVisualDataset(Dataset):
             
             left_spec = torch.FloatTensor(generate_spectrogram(audio_channel1)[:, :256, :])
             right_spec = torch.FloatTensor(generate_spectrogram(audio_channel2)[:, :256, :])
+            
+            # 有50%機率左右聲道顛倒
             if np.random.random() < 0.5:
                 coherence_spec = torch.cat((left_spec, right_spec), dim=0)
                 label = torch.FloatTensor([0])
@@ -131,6 +169,7 @@ class AudioVisualDataset(Dataset):
 
             return {'frame': frame, 'second_frame': second_frame, 'audio_diff_spec': audio_diff_spec, 'audio_mix_spec': audio_mix_spec, 'channel1_spec': channel1_spec , 'channel2_spec': channel2_spec, 'cl_spec': coherence_spec, 'label': label}
         elif self.mode =='val':
+            # val做的事情與train一樣
             # load audio   
             audio, audio_rate = librosa.load(self.audios[index], sr=self.audio_sampling_rate, mono=False)
             # randomly get a start time for the audio segment from the 10s clip]
@@ -145,12 +184,12 @@ class AudioVisualDataset(Dataset):
 
             # get the frame dir path based on audio path
             path_parts = self.audios[index].strip().split('/')
-            video_num = path_parts[-1][:-4]
+            video_num = path_parts[-1][-10:-4]
 
             # get the closest frame to the audio segment
             frame_index = int(
                 round(((audio_start_time + audio_end_time) / 2.0 + 0.05) * 10))  # 10 frames extracted per second
-            frame = process_image(Image.open(os.path.join(self.frame_dir, video_num[-6:], str(frame_index) + '.jpg')).convert('RGB'),
+            frame = process_image(Image.open(os.path.join(self.frame_dir, video_num, str(frame_index) + '.jpg')).convert('RGB'),
                                 self.enable_data_augmentation)
             frame = self.vision_transform(frame)
 
@@ -159,7 +198,7 @@ class AudioVisualDataset(Dataset):
             second_frame_index = int(np.round(frame_index + 10*delta)) 
             if second_frame_index <= 0:
                 second_frame_index = int(np.round(frame_index + 10*abs(delta)))
-            second_frame = process_image(Image.open(os.path.join(self.frame_dir, video_num[-6:], str(frame_index) + '.jpg')).convert('RGB'),
+            second_frame = process_image(Image.open(os.path.join(self.frame_dir, video_num, str(frame_index) + '.jpg')).convert('RGB'),
                                 self.enable_data_augmentation)
             second_frame = self.vision_transform(second_frame)
             
@@ -180,28 +219,27 @@ class AudioVisualDataset(Dataset):
 
             return {'frame': frame, 'second_frame': second_frame, 'audio_diff_spec': audio_diff_spec, 'audio_mix_spec': audio_mix_spec, 'channel1_spec': channel1_spec , 'channel2_spec': channel2_spec, 'cl_spec': coherence_spec, 'label': label}
         else:
-            # load audio   
+            # 載入音訊
             audio, audio_rate = librosa.load(self.audios[index], sr=self.audio_sampling_rate, mono=False)
-            # make a mono audio file for the test
+            # 將音訊正規化後合併為單聲道
             audio = normalize(audio)
             audio_channel1 = audio[0, :]
             audio_channel2 = audio[1, :]
             audio_mix = audio_channel1 + audio_channel2
             
-            # get the frame dir path based on audio path
+            # 找到音訊片段的對應影像幀檔案路徑
             path_parts = self.audios[index].strip().split('/')
-            video_num = path_parts[-1][:-4]
+            video_num = path_parts[-1][-10:-4]
             
-            frames_dir = os.path.join(self.frame_dir, video_num[-6:])
+            frames_dir = os.path.join(self.frame_dir, video_num)
             frame_files = sorted(os.listdir(frames_dir))
             
 
-            # Iterate over the frame files and load each frame
+            # 遍歷該音訊所有的影像幀檔案，並將其轉換為張量
             frames = []
             frames_to_video = []
             for frame_file in frame_files:
                 frame_path = os.path.join(frames_dir, frame_file)
-                # Load frame
                 frame = process_image(Image.open(frame_path).convert('RGB'), augment=False).convert('RGB')
                 
                 frame_to_video = Image.open(frame_path)

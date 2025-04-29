@@ -24,6 +24,7 @@ class model(torch.nn.Module):
         backbone_nets = (self.audio_net, self.fusion_net)
         model_backbone = modelBackbone(backbone_nets)
         model_spatial = modelSpatial(self.spatial_net)
+        model_rir = modelRir(self.generator)
 
          # visual forward
         visual_input = data['frame'].to(device)
@@ -36,6 +37,10 @@ class model(torch.nn.Module):
         second_visual_input = data['second_frame'].to(device)
         second_visual_feature, second_visual_feature_flat = self.visual_net.forward(second_visual_input)
         
+        # rir forward
+        # rir_output = model_rir.forward(rir_input)
+        
+                
         # spatial coherence forward
         if mode != 'test':
             output_spatial = model_spatial(data, visual_feature)

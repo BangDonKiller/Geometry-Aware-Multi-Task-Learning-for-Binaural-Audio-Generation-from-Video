@@ -132,8 +132,6 @@ class AudioNet(nn.Module):
             return pred
         
         elif model_name == 'backbone': 
-            
-
             visual_feat = visual_feat.repeat(1, 1, audio_conv5feature.shape[-2], audio_conv5feature.shape[-1]) #tile visual feature
             
             audioVisual_feature = torch.cat((visual_feat, audio_conv5feature), dim=1)   

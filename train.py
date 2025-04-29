@@ -122,7 +122,6 @@ def clear_folder(folder_path):
     
 
 if __name__ == '__main__':
-    
     clear_folder(debug_dir)
     
     dataset = AudioVisualDataset(audios_dir, frames_dir, gpu_available)

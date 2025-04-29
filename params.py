@@ -24,7 +24,7 @@ debug_dir = "pic_for_debug"
 checkpoints_dir2 = "checkpoints"
 batch_size = 32
 batch_size_test = 1
-epochs = 10
+epochs = 100
 
 
 lr = 1e-4
