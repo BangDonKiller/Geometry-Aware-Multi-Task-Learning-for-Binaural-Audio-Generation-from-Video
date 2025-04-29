@@ -85,13 +85,10 @@ def video_from_frames(frames, path):
     transposed_frames = [np.transpose(frame[0, :, :, :], (1, 2, 0)) for frame in frames]
 
     # 創建影像剪輯列表，這裡需要將 Tensor 轉換為 NumPy 陣列
-    frame_clips = [
-        ImageClip(frame.to('cpu').numpy(), duration=frame_duration) 
-        for frame in transposed_frames[:num_frames]
-    ]
+    frame_clips = [mpy.ImageClip(frame_file, duration=frame_duration) for frame_file in transposed_frames[:num_frames]]
 
     # 合併視頻剪輯為最終的視頻
-    video_clip = concatenate_videoclips(frame_clips, method="compose")
+    video_clip = mpy.concatenate_videoclips(frame_clips, method="compose")
 
     # 計算視頻的總時長
     video_duration = len(frame_clips) * frame_duration
@@ -116,10 +113,10 @@ def video_from_files(idx, paths):
     combine_audio_path = paths["combine_audio"]
 
     # loading video gfg
-    video_clip = VideoFileClip(paths["frames_video"]) 
+    video_clip = mpy.VideoFileClip(paths["frames_video"]) 
     
     # create stereo audio
-    audio_clip = AudioFileClip(combine_audio_path)
+    audio_clip = mpy.AudioFileClip(combine_audio_path)
 
     video_clip = video_clip.set_audio(audio_clip)
     
