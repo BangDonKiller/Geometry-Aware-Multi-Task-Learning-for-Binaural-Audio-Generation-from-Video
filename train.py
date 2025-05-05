@@ -61,8 +61,6 @@ def debug_dataset(dataset, epoch, idx=15, flag='input'):
         plt.savefig('pic_for_debug/audio_spec_output_' + str(epoch) + '.jpg', format='jpg')
 
 
-
-    
 def display_val(model, loss_criterion, writer, index, dataset_val):
     """
     在驗證資料集 (validation dataset) 上評估模型表現，計算平均損失 (loss)，並將結果寫入 TensorBoard。
@@ -87,6 +85,7 @@ def display_val(model, loss_criterion, writer, index, dataset_val):
             channel1_loss = loss_criterion(output['left_spectrogram'], val_data["channel1_spec"][:,:,:-1,:].to(device))
             channel2_loss = loss_criterion(output['right_spectrogram'], val_data["channel2_spec"][:,:,:-1,:].to(device))
             fus_loss = (channel1_loss / 2 + channel2_loss / 2)
+            # 只計算頻譜差異以及左右聲道loss的平均值作為validation loss
             loss = loss_criterion(output['binaural_spectrogram'], Variable(output['audio_gt'])) + fus_loss
 
             losses.append(loss.item()) 
@@ -135,7 +134,7 @@ if __name__ == '__main__':
 
     # validation dataset
     dataset.mode = 'val'
-    val_dataset = AudioVisualDataset(audios_dir, frames_dir, gpu_available,  'val')
+    val_dataset = AudioVisualDataset(audios_dir, frames_dir, gpu_available, 'val')
     subset_val_dataset = Subset(val_dataset, val_dataset.val_indices)
     data_loader_val = DataLoader(
                 subset_val_dataset,
@@ -206,6 +205,7 @@ if __name__ == '__main__':
     # set up loss function
     loss_criterion = torch.nn.MSELoss()
     spatial_loss_criterion = torch.nn.BCEWithLogitsLoss()
+    rir_loss_criterion = torch.nn.L1Loss()
     if(len(gpu_ids) > 0 and gpu_available):
         loss_criterion.cuda(gpu_ids[0])
         spatial_loss_criterion.cuda(gpu_ids[0])
@@ -214,13 +214,11 @@ if __name__ == '__main__':
     total_steps = 0
     best_err = float("inf")
 
-    for epoch in range(epochs):
+    for epoch in range(1, epochs+1):
         if gpu_available:
             torch.cuda.synchronize(device=device)
-        pbar = tqdm.tqdm(data_loader, desc=f"Epoch {epoch+1}/{epochs} (Training)", leave=False)
+        pbar = tqdm.tqdm(data_loader, desc=f"Epoch {epoch}/{epochs} (Training)", leave=False)
         for i, data in enumerate(pbar):
-
-
             total_steps += batch_size
 
             ## forward pass
@@ -228,7 +226,6 @@ if __name__ == '__main__':
             optimizer.zero_grad()
 
             output = model(data, mode='train')
-            
 
             ## compute loss for each model
             # backbone loss
@@ -257,9 +254,16 @@ if __name__ == '__main__':
             c_pred = output['label']
             loss_spatial = spatial_loss_criterion(c, c_pred)
             
-            # combine loss
-            # 現在沒有RIR loss
-            loss = lambda_b * loss_backbone + lambda_g * loss_geometry + lambda_s * loss_spatial
+            # rir loss 空間特性損失
+            if data['rir_spec'] is not None:
+                rir = data['rir_spec'].to(device)
+                rir_pred = output['rir_spec']
+                loss_rir = rir_loss_criterion(rir_pred, rir)
+                # combine loss
+                loss = lambda_b * loss_backbone + lambda_g * loss_geometry + lambda_s * loss_spatial + lambda_p * loss_rir
+            else:
+                # combine loss
+                loss = lambda_b * loss_backbone + lambda_g * loss_geometry + lambda_s * loss_spatial
             
             # batch_loss = 總損失
             batch_loss.append(loss.item())
@@ -271,6 +275,8 @@ if __name__ == '__main__':
             batch_spat_const_loss.append(loss_spatial.item())
             # batch_geom_const_loss = 上下一幀的視覺向量特徵差異
             batch_geom_const_loss.append(loss_geometry.item())
+            # batch_rir_loss = 空間特性損失
+            batch_rir_loss.append(loss_rir.item())
             
             # update optimizer
             #optimizer_resnet.zero_grad()
@@ -285,7 +291,6 @@ if __name__ == '__main__':
             avg_loss = sum(batch_loss) / len(batch_loss)
             pbar.set_postfix({"avg_loss": f"{avg_loss:.4f}"})
 
-
             # 顯示當前batch的Loss並且寫入tensorboard
             if(i % display_freq == 0):
                 if spec_debug:
@@ -297,6 +302,7 @@ if __name__ == '__main__':
                 avg_fusion_loss = sum(batch_fusion_loss) / len(batch_fusion_loss)
                 avg_spat_const_loss = sum(batch_spat_const_loss) / len(batch_spat_const_loss)
                 avg_geom_const_loss = sum(batch_geom_const_loss) / len(batch_geom_const_loss)
+                avg_rir_loss = sum(batch_rir_loss) / len(batch_rir_loss)
                 # print('Average loss: %.3f' % (avg_loss))
                 batch_loss, batch_loss1, batch_fusion_loss, batch_rir_loss, batch_spat_const_loss, batch_geom_const_loss = [], [], [], [], [], []
                 writer.add_scalar('data/loss', avg_loss, total_steps)
@@ -304,6 +310,7 @@ if __name__ == '__main__':
                 writer.add_scalar('data/fusion_loss', avg_fusion_loss, total_steps)
                 writer.add_scalar('data/spat_const_loss', avg_spat_const_loss, total_steps)
                 writer.add_scalar('data/geom_const_loss', avg_geom_const_loss, total_steps)
+                writer.add_scalar('data/rir_loss', avg_rir_loss, total_steps)
                     
         # 存取模型權重至checkpoints資料夾
         if(epoch % save_latest_freq == 0):

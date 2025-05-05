@@ -57,7 +57,12 @@ class EqualizedLearningRateLayer(nn.Module):
 
         self.bias_ = self.layer_.bias if self.layer_.bias else None
         self.layer_.bias = None
-
+    def forward(self, x):
+        self.layer_norm_constant_ = self.layer_norm_constant_.type(torch.cuda.FloatTensor if torch.cuda.is_available() else torch.Tensor)
+        x = self.layer_norm_constant_ * x
+        if self.bias_ is not None:
+            x += self.bias.view(1, self.bias.size()[0], 1, 1)
+        return x
 
 class VisualNet(nn.Module):
     def __init__(self, original_resnet):

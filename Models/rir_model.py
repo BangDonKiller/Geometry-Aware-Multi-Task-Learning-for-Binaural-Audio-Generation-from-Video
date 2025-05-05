@@ -14,8 +14,8 @@ class modelRir(torch.nn.Module):
         super(modelRir, self).__init__()
         self.gen_net = gen_net
         
-
     def forward(self, visual_feature):
         pred_rir = self.gen_net(visual_feature)
+        return pred_rir
         
     

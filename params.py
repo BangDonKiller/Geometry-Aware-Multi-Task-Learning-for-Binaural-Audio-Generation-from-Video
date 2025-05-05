@@ -18,14 +18,21 @@ if gpu_available and torch.cuda.is_available():
 else:
     device = torch.device('cpu')
     
-frames_dir = "D:/Dataset/FAIR-Play/frames"
-audios_dir = "D:/Dataset/FAIR-Play/binaural_audios"
+simbinaural = True
+isScene = True
+if simbinaural:
+    protocol_dir_path = "D:/Dataset/SimBinauralDataset/protocols"
+    frames_dir = "D:/Dataset/SimBinauralDataset/frames"
+    audios_dir = "D:/Dataset/SimBinauralDataset/audio"
+    rir_path = "D:/Dataset/SimBinauralDataset/rir"
+else:
+    frames_dir = "D:/Dataset/FAIR-Play/frames"
+    audios_dir = "D:/Dataset/FAIR-Play/binaural_audios"
 debug_dir = "pic_for_debug"
 checkpoints_dir2 = "checkpoints"
 batch_size = 32
 batch_size_test = 1
-epochs = 100
-
+epochs = 1000
 
 lr = 1e-4
 lr_big = 1e-3

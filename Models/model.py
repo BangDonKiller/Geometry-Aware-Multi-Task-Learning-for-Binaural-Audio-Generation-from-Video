@@ -38,16 +38,19 @@ class model(torch.nn.Module):
         second_visual_feature, second_visual_feature_flat = self.visual_net.forward(second_visual_input)
         
         # rir forward
-        # rir_output = model_rir.forward(rir_input)
-        
+        if data['rir_spec'] is not None:
+            rir_input = visual_feature
+            rir_output, _ = model_rir.forward(rir_input)
+        else:
+            rir_output = None
+            
                 
         # spatial coherence forward
         if mode != 'test':
             output_spatial = model_spatial(data, visual_feature)
-            return {"visual_feature" : visual_feature, "second_visual_feature" : second_visual_feature, **output_backbone, **output_spatial}
+            return {"visual_feature" : visual_feature, "second_visual_feature" : second_visual_feature, **output_backbone, **output_spatial, "rir_spec": rir_output}
         
-        
-        return {"visual_feature" : visual_feature, "second_visual_feature" : second_visual_feature, **output_backbone}
+        return {"visual_feature" : visual_feature, "second_visual_feature" : second_visual_feature, **output_backbone, "rir_spec": rir_output}
         
     
 

@@ -93,8 +93,9 @@ def video_from_frames(frames, path):
     - frames (list of Tensor): 每個 frame 為 4D tensor，形狀為 [1, C, H, W]
     - path (str): 合成影片的儲存路徑
     """
-    frame_duration = 1 / 30  # 每個畫面的持續時間
+    frame_duration = 1 / 10  # 每個畫面的持續時間
     desired_duration = 10  # 目標視頻持續時間
+
 
     # 計算達成目標持續時間所需的影格數量
     num_frames = int(desired_duration / frame_duration)
@@ -113,7 +114,8 @@ def video_from_frames(frames, path):
     video_clip = video_clip.set_duration(video_duration)
 
     # 設置視頻的幀率（fps）
-    frame_rate = 30
+    # frame_rate = 30
+    frame_rate = 10
     video_clip = video_clip.set_fps(frame_rate)
 
     # 輸出視頻文件到指定路徑
@@ -190,7 +192,7 @@ def create_video(frames, audio_left, audio_right, idx):
     video_from_files(idx, paths)
     
     # Remove temp files
-    remove_temps_media(idx, paths)  
+    remove_temps_media(idx, paths)
     
 
 
