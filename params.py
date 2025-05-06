@@ -54,8 +54,8 @@ elif loss_choose =="channel":
 decay_factor = 0.94
 alpha = 0
 
-display_freq = 50     # display_freq batches the training progress 
-save_epoch_freq = 50
+display_freq = 10     # display_freq batches the training progress 
+save_epoch_freq = 10
 save_latest_freq = 10
 validation_freq = 10
 test_overlap = 0.5

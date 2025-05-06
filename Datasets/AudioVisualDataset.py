@@ -112,8 +112,6 @@ class AudioVisualDataset(Dataset):
 
     def __getitem__(self, index):
         if self.mode =='train':
-
-            
             if simbinaural:
                 #load audio
                 audio, audio_rate = librosa.load(self.audios[index], sr=self.audio_sampling_rate, mono=False)
@@ -133,12 +131,12 @@ class AudioVisualDataset(Dataset):
                 path_parts = self.audios[index].strip().split('/')
                 video_num = path_parts[-1][6:-4]
                 
-                # 獲取與音訊片段最接近的影像幀檔案
                     
+                # 獲取與音訊片段最接近的影像幀檔案
                 frame_index = int(
                     round(((audio_start_time + audio_end_time) / 2.0 + 0.05) * 5))  # 5 frames extracted per second
-                # 讀取影像幀檔案，並做資料強化
                 
+                # 讀取影像幀檔案，並做資料強化
                 frame = process_image(Image.open(os.path.join(self.frame_dir, video_num, video_num + "_" + str(frame_index).zfill(4) + '.jpg')).convert('RGB'),
                                     self.enable_data_augmentation)
                 # 將影像轉換為張量並進行正規化
@@ -177,7 +175,6 @@ class AudioVisualDataset(Dataset):
 
                 # 找到音訊片段的對應影像幀檔案路徑
                 path_parts = self.audios[index].strip().split('/')                
-                
                 video_num = path_parts[-1][-10:-4]
 
                 # 獲取與音訊片段最接近的影像幀檔案
@@ -285,9 +282,8 @@ class AudioVisualDataset(Dataset):
 
                 # 找到音訊片段的對應影像幀檔案路徑
                 path_parts = self.audios[index].strip().split('/')                
-                
                 video_num = path_parts[-1][-10:-4]
-
+                
                 # 獲取與音訊片段最接近的影像幀檔案
                 frame_index = int(
                     round(((audio_start_time + audio_end_time) / 2.0 + 0.05) * 10))  # 10 frames extracted per second
@@ -338,7 +334,20 @@ class AudioVisualDataset(Dataset):
             
             # 找到音訊片段的對應影像幀檔案路徑
             path_parts = self.audios[index].strip().split('/')
-            video_num = path_parts[-1][-10:-4]
+            if simbinaural:
+                ch_segment = np.random.choice(int(audio.shape[1]/(audio_rate * 5))) # Choose a 5 second interval to work with
+                video_num = path_parts[-1][6:-4]
+                
+                # Load RIR
+                binaural_rir_file = os.path.join(rir_path, video_num, f'{video_num}_{ch_segment}.wav')
+                rir, sr = librosa.load(binaural_rir_file, sr=16000, mono=False)
+                rir = np.pad(rir, ((0,0), (0, max(0, 3568 - rir.shape[1]))), 'constant', constant_values=0)
+                spec1 = np.abs(librosa.stft(rir[0, :], n_fft=512, hop_length=16, win_length=64, center=True))[:224, :224]
+                spec2 = np.abs(librosa.stft(rir[1, :], n_fft=512, hop_length=16, win_length=64, center=True))[:224, :224]
+                spectro = torch.FloatTensor(np.stack((spec1, spec2)))
+            else:
+                video_num = path_parts[-1][-10:-4]
+                spectro = None
             
             frames_dir = os.path.join(self.frame_dir, video_num)
             frame_files = sorted(os.listdir(frames_dir))
@@ -362,7 +371,7 @@ class AudioVisualDataset(Dataset):
                 frame = self.vision_transform(frame)
                 frames.append(frame)
                 
-            return {'frames': frames, 'audio_mix': audio_mix, 'audio_channel1': audio_channel1 , 'audio_channel2': audio_channel2, "frames_to_video":frames_to_video}
+            return {'frames': frames, 'audio_mix': audio_mix, 'audio_channel1': audio_channel1 , 'audio_channel2': audio_channel2, "frames_to_video":frames_to_video, 'rir_spec': spectro}
         
 if __name__ == "__main__":
     fake_audio_size = int(audio_length * audio_sampling_rate)

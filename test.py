@@ -93,8 +93,8 @@ def video_from_frames(frames, path):
     - frames (list of Tensor): 每個 frame 為 4D tensor，形狀為 [1, C, H, W]
     - path (str): 合成影片的儲存路徑
     """
-    frame_duration = 1 / 10  # 每個畫面的持續時間
-    desired_duration = 10  # 目標視頻持續時間
+    frame_duration = 1 / 30  # 每個畫面的持續時間
+    desired_duration = 20  # 目標視頻持續時間
 
 
     # 計算達成目標持續時間所需的影格數量
@@ -115,7 +115,7 @@ def video_from_frames(frames, path):
 
     # 設置視頻的幀率（fps）
     # frame_rate = 30
-    frame_rate = 10
+    frame_rate = 30
     video_clip = video_clip.set_fps(frame_rate)
 
     # 輸出視頻文件到指定路徑
@@ -237,36 +237,57 @@ def data_test_handle(data, idx, num_loops):
     audio_mix = data['audio_mix']
     audio_channel1 = data['audio_channel1']
     audio_channel2 = data['audio_channel2']
-    audio_full_time = np.floor(len(audio_channel1[0,:]) / audio_sampling_rate)
+    spectro = data['rir_spec']
     
-    if idx < num_loops - 1:
-        audio_start_time = idx * test_overlap * audio_length
-        audio_end_time = idx * test_overlap * audio_length + audio_length
-        audio_start = int(round(audio_start_time * audio_sampling_rate))
-        audio_end = int(round(audio_end_time * audio_sampling_rate))
-    else:
-        audio_start_time = audio_full_time - audio_length
-        audio_end_time = audio_full_time
-        audio_start = int(round(audio_start_time * audio_sampling_rate))
-        audio_end = int(round(audio_end_time * audio_sampling_rate))
+    if simbinaural:
+        ch_segment = np.random.choice(int(audio_mix.shape[1]/(audio_sampling_rate * 5)))
+        audio_start_time = random.uniform(0, 4.3 - audio_length) + (ch_segment*5.0)
+        audio_end_time = audio_start_time + audio_length
+        audio_start = int(audio_start_time * audio_sampling_rate)
+        audio_end = audio_start + int(audio_length * audio_sampling_rate)
+
+        # 獲取與音訊片段最接近的影像幀檔案
+        frame_index = int(
+            round(((audio_start_time + audio_end_time) / 2.0 + 0.05) * 5))  # 5 frames extracted per second
+        frame = frames[frame_index]
+        # 獲取與原始影像幀檔案相差1秒的影像幀檔案，做的資料處理與上面相同
+        second_frame_index = int(round((random.uniform(0, 4.9) + (ch_segment*5.0)) * 5))
+        while second_frame_index == frame_index:
+            second_frame_index = int(round((random.uniform(0, 4.9) + (ch_segment*5.0)) * 5))
+        second_frame = frames[second_frame_index]
         
-    
-    # get the closest frame to the audio segment
-    frame_index = int(round(((audio_start_time + audio_end_time) / 2.0 + 0.05) * 10))  # 10 frames extracted per second
-    frame = frames[frame_index]
+        audio_mix = audio_mix[:, audio_start : audio_end]
+        audio_channel1 = audio_channel1[:, audio_start : audio_end]
+        audio_channel2 = audio_channel2[:, audio_start : audio_end]
+        
+        spectro = batch_spec(spectro)
+     
+    else:
+        audio_full_time = np.floor(len(audio_channel1[0,:]) / audio_sampling_rate)
+        if idx < num_loops - 1:
+            audio_start_time = idx * test_overlap * audio_length
+            audio_end_time = idx * test_overlap * audio_length + audio_length
+            audio_start = int(round(audio_start_time * audio_sampling_rate))
+            audio_end = int(round(audio_end_time * audio_sampling_rate))
+        else:
+            audio_start_time = audio_full_time - audio_length
+            audio_end_time = audio_full_time
+            audio_start = int(round(audio_start_time * audio_sampling_rate))
+            audio_end = int(round(audio_end_time * audio_sampling_rate))
+        # get the closest frame to the audio segment
+        frame_index = int(round(((audio_start_time + audio_end_time) / 2.0 + 0.05) * 10))  # 10 frames extracted per second
+        frame = frames[frame_index]
 
-
-    # get a frame 1 secend befor/after the original frame
-    delta = random.uniform(-1, 1)
-    second_frame_index = int(np.round(frame_index + 10*delta)) 
-    if second_frame_index <= 0:
-        second_frame_index = int(np.round(frame_index + 10*abs(delta)))
-    second_frame = frames[second_frame_index]
-    
-    
-    audio_mix = audio_mix[:, audio_start : audio_end]
-    audio_channel1 = audio_channel1[:, audio_start : audio_end]
-    audio_channel2 = audio_channel2[:, audio_start : audio_end]
+        # get a frame 1 secend befor/after the original frame
+        delta = random.uniform(-1, 1)
+        second_frame_index = int(np.round(frame_index + 10*delta)) 
+        if second_frame_index <= 0:
+            second_frame_index = int(np.round(frame_index + 10*abs(delta)))
+        second_frame = frames[second_frame_index]
+        
+        audio_mix = audio_mix[:, audio_start : audio_end]
+        audio_channel1 = audio_channel1[:, audio_start : audio_end]
+        audio_channel2 = audio_channel2[:, audio_start : audio_end]
     
     # passing the spectrogram of the difference
     audio_diff_spec = batch_spec(audio_channel1 - audio_channel2)
@@ -274,7 +295,8 @@ def data_test_handle(data, idx, num_loops):
     channel1_spec = batch_spec(audio_channel1)
     channel2_spec = batch_spec(audio_channel2)
     
-    return {'frame': frame, 'second_frame': second_frame, 'audio_diff_spec': audio_diff_spec, 'audio_mix_spec': audio_mix_spec, 'channel1_spec': channel1_spec , 'channel2_spec': channel2_spec}
+    
+    return {'frame': frame, 'second_frame': second_frame, 'audio_diff_spec': audio_diff_spec, 'audio_mix_spec': audio_mix_spec, 'channel1_spec': channel1_spec , 'channel2_spec': channel2_spec, 'rir_spec': spectro}
 
 
 def handle_output(data, outputs, idx, num_loops):
@@ -317,13 +339,19 @@ def handle_output(data, outputs, idx, num_loops):
             right_spectrogram[:,:,:, int(right_spectrogram.shape[3] - time_frame) :int((idx - 2) * time_frame * test_overlap + time_frame) ] *= 2/3
             binaural_spectrogram[:,:,:, int(binaural_spectrogram.shape[3] - time_frame) :int((idx - 2) * time_frame * test_overlap + time_frame) ] *= 2/3
             audio_gt[:,:,:, int(audio_gt.shape[3] - time_frame) :int((idx - 2) * time_frame * test_overlap + time_frame) ] *= 2/3
-
-        
+                    
     else:
-        left_spectrogram[:,:,:,int(idx * time_frame * test_overlap) :int(idx * time_frame * test_overlap + time_frame) ] += left_spectrogram_slide
-        right_spectrogram[:,:,:,int(idx * time_frame * test_overlap) :int(idx * time_frame * test_overlap + time_frame) ] += right_spectrogram_slide
-        binaural_spectrogram[:,:,:,int(idx * time_frame * test_overlap) :int(idx * time_frame * test_overlap + time_frame) ] += binaural_spectrogram_slide
-        audio_gt[:,:,:,int(idx * time_frame * test_overlap) :int(idx * time_frame * test_overlap + time_frame) ] += audio_gt_slide
+        if left_spectrogram.shape[3] != (int(idx * time_frame * test_overlap + time_frame) - int(idx * time_frame * test_overlap)):
+            temp = left_spectrogram[:,:,:,int(idx * time_frame * test_overlap) :int(idx * time_frame * test_overlap + time_frame) ].shape[3]   
+            left_spectrogram[:,:,:,int(idx * time_frame * test_overlap) :int(idx * time_frame * test_overlap + time_frame) ] += left_spectrogram_slide[:,:,:,:temp]
+            right_spectrogram[:,:,:,int(idx * time_frame * test_overlap) :int(idx * time_frame * test_overlap + time_frame) ] += right_spectrogram_slide[:,:,:,:temp]
+            binaural_spectrogram[:,:,:,int(idx * time_frame * test_overlap) :int(idx * time_frame * test_overlap + time_frame) ] += binaural_spectrogram_slide[:,:,:,:temp]
+            audio_gt[:,:,:,int(idx * time_frame * test_overlap) :int(idx * time_frame * test_overlap + time_frame) ] += audio_gt_slide[:,:,:,:temp]
+        else:
+            left_spectrogram[:,:,:,int(idx * time_frame * test_overlap) :int(idx * time_frame * test_overlap + time_frame) ] += left_spectrogram_slide
+            right_spectrogram[:,:,:,int(idx * time_frame * test_overlap) :int(idx * time_frame * test_overlap + time_frame) ] += right_spectrogram_slide
+            binaural_spectrogram[:,:,:,int(idx * time_frame * test_overlap) :int(idx * time_frame * test_overlap + time_frame) ] += binaural_spectrogram_slide
+            audio_gt[:,:,:,int(idx * time_frame * test_overlap) :int(idx * time_frame * test_overlap + time_frame) ] += audio_gt_slide
     
     return (left_spectrogram, right_spectrogram, binaural_spectrogram, audio_gt)
 
@@ -378,7 +406,7 @@ if __name__=='__main__':
     
     # 載入資料集並切割測試資料集
     test_dataset = AudioVisualDataset(audios_dir, frames_dir, gpu_available, 'test')
-    subset_test_dataset = Subset(test_dataset, test_dataset.test_indices)
+    subset_test_dataset = Subset(test_dataset, test_dataset.test_indices[:10])
     data_loader_test = DataLoader(
                 subset_test_dataset,
                 batch_size=batch_size_test,
@@ -391,6 +419,7 @@ if __name__=='__main__':
     test_model = build_test_model()
     test_model.eval()
     loss_criterion = torch.nn.MSELoss()
+    rir_loss_criterion = torch.nn.L1Loss()
     if(len(gpu_ids) > 0 and gpu_available):
         loss_criterion.cuda(gpu_ids[0])
     losses_stft, losses_env = [],[]
@@ -420,7 +449,7 @@ if __name__=='__main__':
             "left_spectrogram": left_spectrogram,
             "right_spectrogram": right_spectrogram,
             "binaural_spectrogram": binaural_spectrogram,
-            "audio_gt": audio_gt
+            "audio_gt": audio_gt,
         }
 
         frames = []  # 儲存 frame 用於產生影片
@@ -466,8 +495,19 @@ if __name__=='__main__':
         fusion_loss = 0.5 * (channel1_loss + channel2_loss)  # 左右聲道損失的平均
         loss_backbone = lambda_binarual * difference_loss + lambda_f * fusion_loss  # 結合 binaural 差異與聲道融合損失
 
+        # rir loss 空間特性損失
+        if data['rir_spec'] is not None:
+            rir = data['rir_spec'].to(device)
+            rir_pred = output['rir_spec']
+            loss_rir = rir_loss_criterion(rir_pred, rir)
+            # combine loss
+            loss = lambda_b * loss_backbone + lambda_g * loss_geometry + lambda_p * loss_rir
+        else:
+            # combine loss
+            loss = lambda_b * loss_backbone + lambda_g * loss_geometry
+        
         # 將 STFT loss 與幾何一致性 loss 結合為最終 loss
-        loss = lambda_b * loss_backbone + lambda_g * loss_geometry
+        # loss = lambda_b * loss_backbone + lambda_g * loss_geometry
         losses_stft.append(loss_backbone.item())  # 儲存 STFT 領域的 loss
 
         # 計算 ENV（音訊波形）領域的 loss（重建音訊與真實音訊差異）
