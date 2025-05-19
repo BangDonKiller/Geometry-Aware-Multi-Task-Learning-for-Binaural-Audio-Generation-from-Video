@@ -195,7 +195,7 @@ class AudioVisualDataset(Dataset):
                 second_frame = process_image(Image.open(os.path.join(self.frame_dir, video_num, str(frame_index) + '.jpg')).convert('RGB'),
                                     self.enable_data_augmentation)
                 second_frame = self.vision_transform(second_frame)
-                spectro = None
+                spectro = False
             
             # 將音訊片段轉換為頻譜圖，並將其轉換為浮點數張量
             # 這邊的處理是作為Ground Truth的資料
@@ -302,7 +302,7 @@ class AudioVisualDataset(Dataset):
                 second_frame = process_image(Image.open(os.path.join(self.frame_dir, video_num, str(frame_index) + '.jpg')).convert('RGB'),
                                     self.enable_data_augmentation)
                 second_frame = self.vision_transform(second_frame)
-                spectro = None
+                spectro = False
             
             # 將音訊片段轉換為頻譜圖，並將其轉換為浮點數張量
             # 這邊的處理是作為Ground Truth的資料
@@ -347,7 +347,7 @@ class AudioVisualDataset(Dataset):
                 spectro = torch.FloatTensor(np.stack((spec1, spec2)))
             else:
                 video_num = path_parts[-1][-10:-4]
-                spectro = None
+                spectro = False
             
             frames_dir = os.path.join(self.frame_dir, video_num)
             frame_files = sorted(os.listdir(frames_dir))
@@ -357,7 +357,7 @@ class AudioVisualDataset(Dataset):
             # 遍歷該音訊所有的影像幀檔案，並將其轉換為張量
             frames = []
             frames_to_video = []
-            for frame_file in frame_files:
+            for frame_file in sorted(frame_files, key=lambda x: int(x.split('.')[0])):
                 frame_path = os.path.join(frames_dir, frame_file)
                 frame = process_image(Image.open(frame_path).convert('RGB'), augment=False).convert('RGB')
                 

@@ -178,7 +178,7 @@ if __name__ == '__main__':
     generator.apply(weights_init)
 
     nets = (visual_net, spatial_net, audio_net, fusion_net, generator)
-
+        
     # construct our models
     model = model(nets)
 
@@ -255,7 +255,8 @@ if __name__ == '__main__':
             loss_spatial = spatial_loss_criterion(c, c_pred)
             
             # rir loss 空間特性損失
-            if data['rir_spec'] is not None:
+            # TODO: fix rir loss and add RT60 in it
+            if data['rir_spec'].any():
                 rir = data['rir_spec'].to(device)
                 rir_pred = output['rir_spec']
                 loss_rir = rir_loss_criterion(rir_pred, rir)
@@ -275,8 +276,9 @@ if __name__ == '__main__':
             batch_spat_const_loss.append(loss_spatial.item())
             # batch_geom_const_loss = 上下一幀的視覺向量特徵差異
             batch_geom_const_loss.append(loss_geometry.item())
-            # batch_rir_loss = 空間特性損失
-            batch_rir_loss.append(loss_rir.item())
+            if simbinaural:
+                # batch_rir_loss = 空間特性損失
+                batch_rir_loss.append(loss_rir.item())
             
             # update optimizer
             #optimizer_resnet.zero_grad()
@@ -302,7 +304,6 @@ if __name__ == '__main__':
                 avg_fusion_loss = sum(batch_fusion_loss) / len(batch_fusion_loss)
                 avg_spat_const_loss = sum(batch_spat_const_loss) / len(batch_spat_const_loss)
                 avg_geom_const_loss = sum(batch_geom_const_loss) / len(batch_geom_const_loss)
-                avg_rir_loss = sum(batch_rir_loss) / len(batch_rir_loss)
                 # print('Average loss: %.3f' % (avg_loss))
                 batch_loss, batch_loss1, batch_fusion_loss, batch_rir_loss, batch_spat_const_loss, batch_geom_const_loss = [], [], [], [], [], []
                 writer.add_scalar('data/loss', avg_loss, total_steps)
@@ -310,7 +311,9 @@ if __name__ == '__main__':
                 writer.add_scalar('data/fusion_loss', avg_fusion_loss, total_steps)
                 writer.add_scalar('data/spat_const_loss', avg_spat_const_loss, total_steps)
                 writer.add_scalar('data/geom_const_loss', avg_geom_const_loss, total_steps)
-                writer.add_scalar('data/rir_loss', avg_rir_loss, total_steps)
+                if simbinaural:
+                    avg_rir_loss = sum(batch_rir_loss) / len(batch_rir_loss)
+                    writer.add_scalar('data/rir_loss', avg_rir_loss, total_steps)
                     
         # 存取模型權重至checkpoints資料夾
         if(epoch % save_latest_freq == 0):

@@ -18,7 +18,7 @@ if gpu_available and torch.cuda.is_available():
 else:
     device = torch.device('cpu')
     
-simbinaural = True
+simbinaural = False
 isScene = True
 if simbinaural:
     protocol_dir_path = "D:/Dataset/SimBinauralDataset/protocols"

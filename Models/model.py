@@ -38,7 +38,7 @@ class model(torch.nn.Module):
         second_visual_feature, second_visual_feature_flat = self.visual_net.forward(second_visual_input)
         
         # rir forward
-        if data['rir_spec'] is not None:
+        if data['rir_spec'].any():
             rir_input = visual_feature
             rir_output, _ = model_rir.forward(rir_input)
         else:

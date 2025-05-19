@@ -58,6 +58,45 @@ def show_spec(spec_left_true,spec_right_true, spec_left_pred,spec_right_pred, id
     plt.tight_layout()
     plt.savefig(os.path.join(test_spec_path,'spectrogram_subplot_' + str(idx) + '.jpg'), format='jpg')
 
+def create_waveform(audio_left, audio_right, audio_channel1, audio_channel2, idx):
+    plt.figure(figsize=(15, 12)) # 例如將高度從10增加到12或15
+
+    # 繪製左聲道重建音訊圖 (第一張子圖, 4x1 網格中的第一個位置)
+    plt.subplot(4, 1, 1)
+    plt.plot(audio_left[0:1000])
+    plt.title('Reconstructed Left Audio')
+    # 移除x軸標籤，因為下面的圖會有，避免重複和佔空間
+    plt.tick_params(labelbottom=False)
+
+    # 繪製左聲道 Ground Truth 音訊圖 (第二張子圖, 4x1 網格中的第二個位置)
+    plt.subplot(4, 1, 2)
+    plt.plot(audio_channel1[0, :1000])
+    plt.title('Ground Truth Left Audio')
+    # 移除x軸標籤
+    plt.tick_params(labelbottom=False)
+
+    # 繪製右聲道重建音訊圖 (第三張子圖, 4x1 網格中的第三個位置)
+    plt.subplot(4, 1, 3)
+    plt.plot(audio_right[0:1000])
+    plt.title('Reconstructed Right Audio')
+    # 移除x軸標籤
+    plt.tick_params(labelbottom=False)
+
+    # 繪製右聲道 Ground Truth 音訊圖 (第四張子圖, 4x1 網格中的第四個位置)
+    plt.subplot(4, 1, 4)
+    plt.plot(audio_channel2[0, :1000])
+    plt.title('Ground Truth Right Audio')
+    # 最底下的圖保留x軸標籤
+
+    # 自動調整子圖間距，避免標題或標籤重疊
+    plt.tight_layout()
+
+    # 將整張合併後的圖存檔 (只呼叫一次 savefig)
+    plt.savefig(os.path.join(test_spec_path,'audio_subplot_' + str(idx) + '.jpg'), format='jpg')
+
+    # 關閉圖形
+    plt.close()
+
 
 def save_audio(audio_data, path):
     """
@@ -93,8 +132,8 @@ def video_from_frames(frames, path):
     - frames (list of Tensor): 每個 frame 為 4D tensor，形狀為 [1, C, H, W]
     - path (str): 合成影片的儲存路徑
     """
-    frame_duration = 1 / 30  # 每個畫面的持續時間
-    desired_duration = 20  # 目標視頻持續時間
+    frame_duration = 1 / 10  # 每個畫面的持續時間
+    desired_duration = 10  # 目標視頻持續時間
 
 
     # 計算達成目標持續時間所需的影格數量
@@ -115,7 +154,7 @@ def video_from_frames(frames, path):
 
     # 設置視頻的幀率（fps）
     # frame_rate = 30
-    frame_rate = 30
+    frame_rate = 10
     video_clip = video_clip.set_fps(frame_rate)
 
     # 輸出視頻文件到指定路徑
@@ -216,7 +255,7 @@ def inverse_spectrogram(audio_spec, length,  type='tensor'):
     audio_spectogram = audio_spectogram.detach().cpu().numpy()
     
     # Compute the inverse STFT to get the audio signal
-    audio_reconstructed = librosa.core.istft(audio_spectogram, hop_length=160, win_length=400, length=length, center=True)
+    audio_reconstructed = librosa.istft(audio_spectogram, hop_length=160, win_length=400, length=length, center=True)
     
     return audio_reconstructed
 
@@ -300,6 +339,7 @@ def data_test_handle(data, idx, num_loops):
 
 
 def handle_output(data, outputs, idx, num_loops):
+    # TODO: 檢查這個函數是否正確處理窗口間的重疊與平均
     """
     將每一段產出的頻譜進行疊加與平均處理，形成完整音訊頻譜。
 
@@ -485,8 +525,9 @@ if __name__=='__main__':
 
         # 預測的頻譜轉回時域音訊（右聲道，疑似用 left_spectrogram 錯植）
         re_right_spectrogram = inverse_spectrogram(left_spectrogram, audio_length_test)
-        re_right_spectrogram = torch.FloatTensor(re_right_spectrogram)
-
+        re_right_spectrogram = torch.FloatTensor(re_right_spectrogram)     
+            
+            
         # 計算 STFT 領域的 loss（含 binaural 差異、兩聲道一致性等）
         loss_geometry = sum(loss_geometry) / len(loss_geometry)  # 計算平均 geometric loss
         difference_loss = loss_criterion(binaural_spectrogram, audio_gt)  # 預測雙耳與真實雙耳頻譜的差異
@@ -496,7 +537,7 @@ if __name__=='__main__':
         loss_backbone = lambda_binarual * difference_loss + lambda_f * fusion_loss  # 結合 binaural 差異與聲道融合損失
 
         # rir loss 空間特性損失
-        if data['rir_spec'] is not None:
+        if data['rir_spec'].any():
             rir = data['rir_spec'].to(device)
             rir_pred = output['rir_spec']
             loss_rir = rir_loss_criterion(rir_pred, rir)
@@ -519,6 +560,7 @@ if __name__=='__main__':
         # 若是前幾筆測試資料，則輸出合成影片
         frames = data["frames_to_video"]
         if idx < 10:
+            create_waveform(re_left_spectrogram, re_right_spectrogram, data['audio_channel1'], data['audio_channel2'], idx)
             create_video(frames, re_left_spectrogram, re_right_spectrogram, batch_idx)
 
         batch_idx += 1  # 計數累加
